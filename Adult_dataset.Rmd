@@ -1,0 +1,263 @@
+---
+title: "Adult data"
+author: "Shrinath"
+date: "June 22, 2018"
+output: html_document
+---
+
+In this project we will be working with the UCI adult dataset. I will be attempting to predict if people in the data set belong in a certain class by salary, either making <=50k or >50k per year.
+
+Typically most of your time is spent cleaning data, not running the few lines of code that build your model, this project will try to reflect that by showing different issues that may arise when cleaning data.
+
+
+Get the Data
+Import the  data file and set it to a data frame called mydf.
+
+```{r}
+library(data.table)
+
+mydf <-fread("https://archive.ics.uci.edu/ml/machine-learning-databases/adult/adult.data")
+```
+
+Check the head of adult
+
+```{r}
+head(mydf)
+```
+Since we don't have the column names, therefore will name the coulmns 
+ 
+```{r}
+colnames(mydf) <- c('age','workclass','fnlwgt','education','education-num','marital',
+                    'occupation','relationship','race','sex','capital-gain',
+                    'capital-loss','hours_per_week','country','income')
+
+head(mydf)
+```
+Lets check the data type of each variable
+
+```{r}
+str(mydf)
+```
+
+```{r}
+summary(mydf)
+```
+
+Data Cleaning
+Notice that we have a lot of columns that are cateogrical factors, however a lot of these columns have too many factors than may be necessary. In this data cleaning section we'll try to clean these columns up by reducing the number of factors.
+
+```{r}
+table(mydf$workclass)
+```
+
+Never-worked and without pay can be put into one category i.e 'unemployed'
+
+```{r}
+
+unemp <- function(job){
+    job <- as.character(job)
+    if (job=='Never-worked' | job=='Without-pay'){
+        return('Unemployed')
+    }else{
+        return(job)
+    }
+}
+mydf$workclass <- sapply(mydf$workclass,unemp)
+
+table(mydf$workclass)
+
+
+
+
+
+```
+
+```{r}
+
+group_emp <- function(job){
+    if (job=='Local-gov' | job=='State-gov'){
+        return('SL-gov')
+    }else if (job=='Self-emp-inc' | job=='Self-emp-not-inc'){
+        return('self-emp')
+    }else{
+        return(job)
+    }
+}
+
+mydf$workclass <- sapply(mydf$workclass,group_emp)
+
+table(mydf$workclass)
+```
+
+```{r}
+
+table(mydf$marital)
+```
+
+```{r}
+group_marital <- function(mar){
+    mar <- as.character(mar)
+    
+    # Not-Married
+    if (mar=='Separated' | mar=='Divorced' | mar=='Widowed'){
+        return('Not-Married')
+    
+    # Never-Married   
+    }else if(mar=='Never-married'){
+        return(mar)
+    
+     #Married
+    }else{
+        return('Married')
+    }
+}
+
+mydf$marital <- sapply(mydf$marital,group_marital)
+table(mydf$marital)
+
+```
+
+```{r}
+
+table(mydf$country)
+```
+If we see carefully this country column doesn't having all the countries. SO i will group it by continent.
+
+```{r}
+Asia <- c('China','Hong','India','Iran','Cambodia','Japan', 'Laos' ,
+          'Philippines' ,'Vietnam' ,'Taiwan', 'Thailand')
+
+North.America <- c('Canada','United-States','Puerto-Rico' )
+
+Europe <- c('England' ,'France', 'Germany' ,'Greece','Holand-Netherlands','Hungary',
+            'Ireland','Italy','Poland','Portugal','Scotland','Yugoslavia')
+
+Latin.and.South.America <- c('Columbia','Cuba','Dominican-Republic','Ecuador',
+                             'El-Salvador','Guatemala','Haiti','Honduras',
+                             'Mexico','Nicaragua','Outlying-US(Guam-USVI-etc)','Peru',
+                            'Jamaica','Trinadad&Tobago')
+Other <- c('South')
+```
+
+```{r}
+group_country <- function(ctry){
+    if (ctry %in% Asia){
+        return('Asia')
+    }else if (ctry %in% North.America){
+        return('North.America')
+    }else if (ctry %in% Europe){
+        return('Europe')
+    }else if (ctry %in% Latin.and.South.America){
+        return('Latin.and.South.America')
+    }else{
+        return('Other')      
+    }
+}
+
+mydf$country <- sapply(mydf$country,group_country)
+table(mydf$country)
+```
+
+```{r}
+
+mydf$workclass <- sapply(mydf$workclass,factor)
+mydf$country <- sapply(mydf$country,factor)
+mydf$marital <- sapply(mydf$marital,factor)
+mydf$education <- sapply(mydf$education,factor)
+mydf$relationship <- sapply(mydf$relationship,factor)
+mydf$race <- sapply(mydf$race,factor)
+mydf$sex <- sapply(mydf$sex,factor)
+mydf$income <- sapply(mydf$income,factor)
+mydf$occupation <- sapply(mydf$occupation,factor)
+
+
+str(mydf)
+```
+
+Missing Data
+Converting any cell with a '?' or a ' ?' value to a NA value
+
+```{r}
+library(Amelia)
+mydf[mydf == '?'] <- NA
+missmap(mydf)
+
+```
+
+```{r}
+# May take awhile
+mydf <- na.omit(mydf)
+```
+
+```{r}
+missmap(mydf,y.at=c(1),y.labels = c(''),col=c('yellow','black'))
+```
+
+Exploratory Data analysis
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+
+```{r}
+ggplot(mydf,aes(age)) + geom_histogram(aes(fill=income),color='black',binwidth=1) + theme_bw()
+```
+
+
+```{r}
+ggplot(mydf,aes(hours_per_week)) + geom_histogram() + theme_bw()
+```
+
+Building a model
+
+```{r}
+# Import Library
+library(caTools)
+
+# Set a random see so your "random" results are the same as this notebook
+set.seed(101) 
+
+# Split up the sample, basically randomly assigns a booleans to a new column "sample"
+sample <- sample.split(mydf$income, SplitRatio = 0.70) # SplitRatio = percent of sample==TRUE
+
+# Training Data
+train = subset(mydf, sample == TRUE)
+
+# Testing Data
+test = subset(mydf, sample == FALSE)
+```
+
+
+```{r}
+model = glm(income ~ ., family = binomial(logit), data = train)
+```
+
+
+```{r}
+summary(model)
+```
+
+We have still a lot of features! Some important, some not so much. R comes with an awesome function called step(). The step() function iteratively tries to remove predictor variables from the model in an attempt to delete variables that do not significantly add to the fit. How does it do this? It uses AIC.
+
+```{r}
+new.step.model <- step(model)
+```
+
+```{r}
+summary(new.step.model)
+```
+We should have noticed that the step() function kept all the features used previously! While we used the AIC criteria to compare models, there are other criteria we could have used. We can try reading about the variable inflation factor (VIF) and vif() function to explore other options for comparison criteria. In the meantime let's continue on and see how well our model performed against the test set.
+
+Creating a confusion matrix using the predict function with type='response' as an argument inside of that function.
+
+```{r}
+test$predicted.income = predict(model, newdata=test, type="response")
+
+table(test$income, test$predicted.income > 0.5)
+```
+Accuracy 
+```{r}
+(6372+1423)/(6372+1423+548+872)
+```
